@@ -1,10 +1,15 @@
+import logging
 import os
 import time
-import requests
-import logging
-from telegram import Bot
-from dotenv import load_dotenv
 from http import HTTPStatus
+from sys import stdout
+
+import requests
+from dotenv import load_dotenv
+from telegram import Bot
+
+from exceptions import GetAPIException, ParseStatusException
+
 load_dotenv()
 
 ONE_DAY_IN_SEC = 86400
@@ -25,60 +30,72 @@ HOMEWORK_STATUSES = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler(stdout)
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 def send_message(bot, message):
+    """Отправка сообщения."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        logging.info(f'Сообщение: "{message}" удачно отправлено!')
+        logger.info(f'Сообщение: "{message}", удачно отправлено!')
     except Exception as error:
-        logging.error(f'Ошибка при отправке сообщени: {error}')
+        logger.error(f'Ошибка при отправке сообщени: {error}')
 
 
 def get_api_answer(current_timestamp):
+    """Запрос на получение данных по домашним работам."""
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     response = requests.get(ENDPOINT, headers=HEADERS, params=params)
     if response.status_code == HTTPStatus.OK:
         return response.json()
     else:
-        logging.error(
+        logger.error(
             f'Сбой в работе программы: Эндпоинт {ENDPOINT} недоступен. '
             f'Код ответа API: {response.status_code}'
         )
-        raise AssertionError
+        raise GetAPIException
 
 
 def check_response(response):
+    """Проверка корректности полученных данных."""
     if isinstance(response, dict) and isinstance(response['homeworks'], list):
         return response.get('homeworks')
     else:
-        logging.error('Отсутствуют ожидаемые ключи в ответе API')
+        logger.error('Некорректные данные в response')
         raise TypeError
 
 
 def parse_status(homework):
+    """Извлечение статуса домашней работы."""
     try:
         homework_name = homework['homework_name']
-    except KeyError:
-        raise KeyError
+    except Exception as error:
+        err_message = f'Ошибка при извлечении статуса домашней работы: {error}'
+        logger.error(err_message)
+        raise KeyError(err_message)
     homework_status = homework.get('status')
     if homework_status not in HOMEWORK_STATUSES.keys():
-        logging.error(f'Неизвестный статус домашней работы {homework_status}')
-        raise AssertionError
+        logger.error(f'Неизвестный статус домашней работы {homework_status}')
+        raise ParseStatusException
     verdict = HOMEWORK_STATUSES[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def check_tokens():
+    """Проверка наличия необходимых данных для корректной работы бота."""
     is_exist = True
     if (PRACTICUM_TOKEN is None
         or TELEGRAM_CHAT_ID is None
             or TELEGRAM_TOKEN is None):
-        logging.critical('Одна или более переменных окружения не определены')
+        logger.critical('Одна или более переменных окружения не определены')
         is_exist = False
     return is_exist
 
@@ -93,13 +110,13 @@ def main():
             try:
                 response = get_api_answer(current_timestamp)
                 homework = check_response(response)
-                message = parse_status(homework)
+                message = parse_status(homework[0])
                 if status != message:
                     send_message(bot, message)
                     status = message
             except Exception as error:
                 message = f'Сбой в работе программы: {error}'
-                logging.error(message)
+                logger.error(message)
                 send_message(bot, message)
             finally:
                 time.sleep(RETRY_TIME)
