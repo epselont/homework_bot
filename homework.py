@@ -5,12 +5,12 @@ from http import HTTPStatus
 from sys import stdout
 
 import requests
-from dotenv import load_dotenv
 import telegram
+from dotenv import load_dotenv
 
 from exceptions import GetAPIException, ParseStatusException
-from settings import (DAYS, ENDPOINT, HOMEWORK_STATUSES,
-                      ONE_DAY_IN_SEC, RETRY_TIME)
+from settings import (DAYS, ENDPOINT, HOMEWORK_STATUSES, ONE_DAY_IN_SEC,
+                      RETRY_TIME)
 
 load_dotenv()
 
@@ -19,11 +19,7 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
-tokens = [
-    PRACTICUM_TOKEN,
-    TELEGRAM_TOKEN,
-    TELEGRAM_CHAT_ID
-]
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -107,7 +103,7 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверка наличия необходимых данных для корректной работы бота."""
-    return all(tokens)
+    return all([PRACTICUM_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_TOKEN])
 
 
 def main():
